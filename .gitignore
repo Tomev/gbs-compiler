@@ -5,3 +5,7 @@ __pycache__
 .ruff_cache
 .pytest_cache
 .DS_Store
+experiments/*/*.pdf
+experiments/*/*.html
+experiments/*/*.png
+experiments/*/*.json

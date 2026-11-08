@@ -1,17 +1,16 @@
 [project]
 name = "gbs-compiler"
-version = "0.2.5"
+version = "0.3.0"
 license = "Apache-2.0"
 description = "Compiler for translating Blackbird quantum optics programs into qubit-based OpenQASM circuits via truncated Fock space encoding."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [
-    { name = "Grzegorz Czelusta" },
-]
+authors = [{ name = "Grzegorz Czelusta" }]
 dependencies = [
     # transitive via pennylane-qiskit; <=0.55.2 ships only an sdist that needs
     # pkg_resources (removed in setuptools 81) and fails to build
     "ibm-platform-services>=0.56",
+    "numpy>=2.4.6",
     "pennylane>=0.44.0",
     "pennylane-qiskit>=0.44.1",
     "quantum-blackbird>=0.5.0",
@@ -23,6 +22,12 @@ Documentation = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler#readme"
 Repository = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler"
 Issues = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler/issues"
 
+[project.optional-dependencies]
+exp = [
+    "kaleido>=1.5.0",
+    "plotly>=7.1.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -31,12 +36,7 @@ build-backend = "hatchling.build"
 packages = ["src/gbs_compiler"]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov>=6.0",
-    "ruff>=0.9.0",
-    "mypy>=1.14.0",
-]
+dev = ["pytest>=8.0", "pytest-cov>=6.0", "ruff>=0.9.0", "mypy>=1.14.0"]
 docs = [
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
@@ -52,7 +52,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "D"]
-ignore = ["D1"]  # don't require docstrings everywhere during alpha
+ignore = ["D1"]                          # don't require docstrings everywhere during alpha
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

@@ -1,8 +1,16 @@
 import json
+from functools import cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pennylane as qml
+from iqm.qiskit_iqm import transpile_to_IQM
+from iqm.qiskit_iqm.fake_backends.iqm_fake_backend import (
+    IQMFakeBackend,
+)
+from iqm_benchmark.simulator import FakeFromDicts
+from qiskit import QuantumCircuit
 
 from gbs_compiler import CompilerGBS
 
@@ -64,6 +72,30 @@ def compute_noiseless_probs_from_counts(qasm: str, shots: int = 10_000) -> dict[
     return filter_probs({str(state): float(count / total) for state, count in counts.items()})
 
 
+@cache  # Building the backend queries the IQM server, so do it only once per run.
+def create_noisy_vlq_sim() -> IQMFakeBackend:
+    architecture_dict_path = Path(__file__).with_name("vlq_dynamic_architecture.json")
+    calibration_dict_path = Path(__file__).with_name("vlq_calibration.json")
+    metrics_dict_path = Path(__file__).with_name("vlq_metrics.json")
+
+    architecture_dict: dict[str, Any] = json.loads(architecture_dict_path.read_text())
+    calibration_dict: dict[str, Any] = json.loads(calibration_dict_path.read_text())
+    metrics_dict: dict[str, Any] = json.loads(metrics_dict_path.read_text())
+
+    return FakeFromDicts(architecture_dict, calibration_dict, metrics_dict, "FakeVLQ")
+
+
+def compute_noisy_probs(open_qasm: str, shots: int = 10_000) -> dict[str, float]:
+    backend: IQMFakeBackend = create_noisy_vlq_sim()
+    circuit: QuantumCircuit = transpile_to_IQM(QuantumCircuit.from_qasm_str(open_qasm), backend)
+
+    counts: dict[str, int] = backend.run(circuit, shots=shots).result().get_counts()
+    total: int = sum(counts.values())
+
+    # Qiskit bitstrings are little-endian; reverse them to match the q0q1q2q3 keys of the PennyLane-based results.
+    return filter_probs({state[::-1]: count / total for state, count in counts.items()})
+
+
 def filter_probs(probs: dict[str, float]) -> dict[str, float]:
 
     return {k: v for k, v in probs.items() if v > 1e-20}
@@ -86,10 +118,12 @@ def main() -> None:
         results[n]["theoretical"] = compute_theoretical_probs(theta)
         results[n]["noiseless"] = compute_noiseless_probs(open_qasm_circuit)
         results[n][f"noiseless-{n_samples}-samples"] = compute_noiseless_probs_from_counts(open_qasm_circuit, n_samples)
+        results[n][f"noisy-vlq-{n_samples}-samples"] = compute_noisy_probs(open_qasm_circuit)
 
         print(f"\t{results[n]['theoretical']}")
         print(f"\t{results[n]['noiseless']}")
         print(f"\t{results[n][f'noiseless-{n_samples}-samples']}")
+        print(f"\t{results[n][f'noisy-vlq-{n_samples}-samples']}")
 
     output = Path(__file__).with_name("tilted_bs_results.json")
 

@@ -46,12 +46,6 @@ def find_series_names(data: Results, steps: list[str]) -> list[str]:
     return names
 
 
-def find_states(data: Results, steps: list[str]) -> list[str]:
-    return list(
-        dict.fromkeys(state for step in steps for series in data[step].values() for state in series)
-    )
-
-
 def series_label(name: str) -> str:
     return name.replace("-", " ").replace("_", " ").capitalize()
 
@@ -66,9 +60,7 @@ def series_style(name: str, color: str, symbol: str) -> dict:
     )
 
 
-def series_probabilities(
-    data: Results, steps: list[str], name: str, state: str
-) -> list[float | None]:
+def series_probabilities(data: Results, steps: list[str], name: str, state: str) -> list[float | None]:
     # A state absent from a series has probability 0; a series absent from a step has no data.
     return [data[step][name].get(state, 0.0) if name in data[step] else None for step in steps]
 
@@ -120,7 +112,7 @@ def apply_layout(fig: go.Figure, plot_height: int) -> None:
 def build_figure(data: Results) -> go.Figure:
     steps = sorted(data, key=int)
     series_names = find_series_names(data, steps)
-    states = find_states(data, steps)
+    states = ["1000", "0101", "0010"]
 
     rows = len(states)
     plot_height = rows * PANEL_HEIGHT + (rows - 1) * PANEL_GAP

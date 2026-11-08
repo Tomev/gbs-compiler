@@ -24,7 +24,6 @@ Issues = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler/issues"
 
 [project.optional-dependencies]
 exp = [
-    "kaleido>=1.5.0",
     "plotly>=7.1.0",
 ]
 

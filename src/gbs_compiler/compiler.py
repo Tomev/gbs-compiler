@@ -30,6 +30,7 @@ from gbs_compiler.operations import (
     BeamSplitter,
     CVOperation,
     Displacement,
+    Fock,
     PhaseShift,
     Squeeze,
     SqueezedVacuum,
@@ -154,9 +155,7 @@ class CompilerGBS:
         num_modes = len(bb.loads(bb_circuit).modes)
         return num_modes * self.num_qubits_per_mode
 
-    def binary_to_photon_meas(
-        self, binary_samples: NDArray[np.integer]
-    ) -> NDArray[np.integer]:
+    def binary_to_photon_meas(self, binary_samples: NDArray[np.integer]) -> NDArray[np.integer]:
         """Convert qubit measurement outcomes to photon-number counts.
 
         Each group of ``num_qubits_per_mode`` bits is interpreted as the
@@ -182,9 +181,7 @@ class CompilerGBS:
         for mode in range(num_modes):
             wires = self.map_mode_to_wires(mode)
             for qubit in wires:
-                photon_counts[:, mode] = (
-                    2 * photon_counts[:, mode] + binary_samples[:, qubit].astype(np.int64)
-                )
+                photon_counts[:, mode] = 2 * photon_counts[:, mode] + binary_samples[:, qubit].astype(np.int64)
         return photon_counts
 
     # ------------------------------------------------------------------
@@ -209,6 +206,16 @@ class CompilerGBS:
     # ------------------------------------------------------------------
     # Internal compilation helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_operation_args_fock(op: dict[str, Any], default_n_photons: int = 1) -> int:
+        """Extract the number of photons from a Blackbird operation dict ``op``."""
+        args = op.get("args", [])
+
+        if len(args) == 0:
+            return default_n_photons
+
+        return args[0]
 
     @staticmethod
     def _parse_operation_args_r_phi(
@@ -236,15 +243,18 @@ class CompilerGBS:
             return (args[0], default_phi)
         return (args[0], args[1])
 
+    def _compile_fock(self, op: dict[str, Any]) -> QuantumScript:
+        """Handles the fock state preparation on selected modes."""
+        n_photons: int = self._parse_operation_args_fock(op)
+        return Fock(self.fock_cutoff).gate_decomposition(n_photons=n_photons, mode=op["modes"][0])
+
     def _compile_sgate(self, op: dict[str, Any]) -> QuantumScript:
         r, phi = self._parse_operation_args_r_phi(op)
         return Squeeze(self.fock_cutoff).gate_decomposition(r=r, phi=phi, mode=op["modes"][0])
 
     def _compile_squeezed_vacuum(self, op: dict[str, Any]) -> QuantumScript:
         r, phi = self._parse_operation_args_r_phi(op)
-        return SqueezedVacuum(self.fock_cutoff).gate_decomposition(
-            r=r, phi=phi, mode=op["modes"][0]
-        )
+        return SqueezedVacuum(self.fock_cutoff).gate_decomposition(r=r, phi=phi, mode=op["modes"][0])
 
     def _compile_dgate(self, op: dict[str, Any]) -> QuantumScript:
         r, phi = self._parse_operation_args_r_phi(op)
@@ -274,6 +284,7 @@ class CompilerGBS:
         )
 
     _OP_DISPATCH = {
+        "Fock": "_compile_fock",
         "Squeezed": "_compile_squeezed_vacuum",
         "Sgate": "_compile_sgate",
         "Dgate": "_compile_dgate",
@@ -292,23 +303,22 @@ class CompilerGBS:
             name = op["op"]
 
             method_name = self._OP_DISPATCH.get(name)
+
             if method_name is None:
                 raise NotImplementedError(
-                    f"Operation '{name}' is not supported. "
-                    f"Supported: {sorted(self._OP_DISPATCH)}"
+                    f"Operation '{name}' is not supported. Supported: {sorted(self._OP_DISPATCH)}"
                 )
+
             if name == "Squeezed" and op["modes"][0] in touched_modes:
                 raise ValueError(
                     f"'Squeezed' prepares a state and must be the first operation on "
                     f"mode {op['modes'][0]}, but the mode was already acted on."
                 )
+
             if name == "Sgate" and op["modes"][0] not in touched_modes:
                 method_name = "_compile_squeezed_vacuum"
-            if (
-                name == "BSgate"
-                and self.fock_cutoff == 4
-                and not odd_modes.intersection(op["modes"])
-            ):
+
+            if name == "BSgate" and self.fock_cutoff == 4 and not odd_modes.intersection(op["modes"]):
                 method_name = "_compile_bsgate_even_input"
 
             gates.extend(list(getattr(self, method_name)(op)))
@@ -332,7 +342,4 @@ class CompilerGBS:
     @staticmethod
     def _remove_gphase(qasm_program: str) -> str:
         """Strip ``gphase(...)`` lines from an OpenQASM string."""
-        return "\n".join(
-            line for line in qasm_program.splitlines()
-            if not line.startswith("gphase")
-        ) + "\n"
+        return "\n".join(line for line in qasm_program.splitlines() if not line.startswith("gphase")) + "\n"

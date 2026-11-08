@@ -85,6 +85,7 @@ RealMatrix = NDArray[np.floating]
 # Utility functions
 # ---------------------------------------------------------------------------
 
+
 def matrix_to_U3(A: ComplexMatrix, wire: int) -> Operation:
     """Convert a 2×2 unitary matrix to a PennyLane ``U3`` gate.
 
@@ -165,20 +166,23 @@ def decompose_kronecker(
     """
     if np.abs(AB_matrix[0, 0]) < 1e-12:
         raise ValueError(
-            "Cannot decompose: AB_matrix[0,0] is zero. "
-            "This degenerate case requires a different extraction algorithm."
+            "Cannot decompose: AB_matrix[0,0] is zero. This degenerate case requires a different extraction algorithm."
         )
 
     # A from corner elements (rows/cols 0,2).
-    A_raw = np.array([
-        [AB_matrix[0, 0], AB_matrix[0, 2]],
-        [AB_matrix[2, 0], AB_matrix[2, 2]],
-    ])
+    A_raw = np.array(
+        [
+            [AB_matrix[0, 0], AB_matrix[0, 2]],
+            [AB_matrix[2, 0], AB_matrix[2, 2]],
+        ]
+    )
     # B from top-left 2×2 block, normalised by AB[0,0].
-    B_raw = np.array([
-        [1, AB_matrix[0, 1] / AB_matrix[0, 0]],
-        [AB_matrix[1, 0] / AB_matrix[0, 0], AB_matrix[1, 1] / AB_matrix[0, 0]],
-    ])
+    B_raw = np.array(
+        [
+            [1, AB_matrix[0, 1] / AB_matrix[0, 0]],
+            [AB_matrix[1, 0] / AB_matrix[0, 0], AB_matrix[1, 1] / AB_matrix[0, 0]],
+        ]
+    )
 
     A_su2 = A_raw / np.sqrt(np.linalg.det(A_raw))
     B_su2 = B_raw / np.sqrt(np.linalg.det(B_raw))
@@ -188,6 +192,7 @@ def decompose_kronecker(
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
+
 
 class CVOperation:
     r"""Base class for CV quantum operations in truncated Fock space.
@@ -217,10 +222,7 @@ class CVOperation:
 
     def __init__(self, fock_cutoff: int) -> None:
         if fock_cutoff not in (2, 4):
-            raise ValueError(
-                f"Fock cutoff must be 2 or 4, got {fock_cutoff}. "
-                "Other cutoffs are not yet implemented."
-            )
+            raise ValueError(f"Fock cutoff must be 2 or 4, got {fock_cutoff}. Other cutoffs are not yet implemented.")
         self.fock_cutoff = fock_cutoff
         self.num_qubits_per_mode = math.ceil(math.log2(fock_cutoff))
 
@@ -282,17 +284,20 @@ class CVOperation:
         QuantumScript
             ``S(w0) · S(w1) · H(w1) · CNOT(w1 → w0)``.
         """
-        return QuantumScript([
-            qml.S(wires[0]),
-            qml.S(wires[1]),
-            qml.H(wires[1]),
-            qml.CNOT(wires[::-1]),
-        ])
+        return QuantumScript(
+            [
+                qml.S(wires[0]),
+                qml.S(wires[1]),
+                qml.H(wires[1]),
+                qml.CNOT(wires[::-1]),
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------
 # PhaseShift  (Rgate)
 # ---------------------------------------------------------------------------
+
 
 class PhaseShift(CVOperation):
     r"""Phase-shift (rotation) operator $R(\varphi)$.
@@ -328,17 +333,21 @@ class PhaseShift(CVOperation):
             Diagonal unitary of dimension ``fock_cutoff``.
         """
         if self.fock_cutoff == 2:
-            return Matrix([
-                [1, 0],
-                [0, exp(-I * phi)],
-            ])
+            return Matrix(
+                [
+                    [1, 0],
+                    [0, exp(-I * phi)],
+                ]
+            )
         else:  # cutoff == 4
-            return Matrix([
-                [1, 0, 0, 0],
-                [0, exp(-I * phi), 0, 0],
-                [0, 0, exp(-2 * I * phi), 0],
-                [0, 0, 0, exp(-3 * I * phi)],
-            ])
+            return Matrix(
+                [
+                    [1, 0, 0, 0],
+                    [0, exp(-I * phi), 0, 0],
+                    [0, 0, exp(-2 * I * phi), 0],
+                    [0, 0, 0, exp(-3 * I * phi)],
+                ]
+            )
 
     def numerical_matrix(self, phi: float) -> ComplexMatrix:
         """Numerical Fock-basis matrix for the phase shift.
@@ -379,15 +388,18 @@ class PhaseShift(CVOperation):
         if self.fock_cutoff == 2:
             return QuantumScript([qml.RZ(-phi, wires=wires[0])])
         else:
-            return QuantumScript([
-                qml.RZ(-2 * phi, wires=wires[0]),
-                qml.RZ(-phi, wires=wires[1]),
-            ])
+            return QuantumScript(
+                [
+                    qml.RZ(-2 * phi, wires=wires[0]),
+                    qml.RZ(-phi, wires=wires[1]),
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
 # Displacement  (Dgate)
 # ---------------------------------------------------------------------------
+
 
 class Displacement(CVOperation):
     r"""Displacement operator $D(\alpha)$ with $\alpha = r\,e^{i\varphi}$.
@@ -429,10 +441,12 @@ class Displacement(CVOperation):
             Unitary matrix in the truncated Fock basis.
         """
         if self.fock_cutoff == 2:
-            return Matrix([
-                [cos(r), -exp(-I * phi) * sin(r)],
-                [exp(I * phi) * sin(r), cos(r)],
-            ])
+            return Matrix(
+                [
+                    [cos(r), -exp(-I * phi) * sin(r)],
+                    [exp(I * phi) * sin(r), cos(r)],
+                ]
+            )
 
         # cutoff == 4 ---------------------------------------------------
         omega_plus = sqrt(3 + sqrt(6))
@@ -445,32 +459,36 @@ class Displacement(CVOperation):
 
         sqrt2, sqrt3, sqrt6 = sqrt(2), sqrt(3), sqrt(6)
 
-        D_real = simplify(Matrix([
-            [
-                (sqrt6 + 3) * c_minus / 6 - (sqrt6 - 3) * c_plus / 6,
-                -(s_minus + s_plus) / 2,
-                (c_minus - c_plus) / (2 * sqrt3),
-                (s_plus - s_minus) / 2,
-            ],
-            [
-                (s_minus + s_plus) / 2,
-                (c_minus + c_plus) / 2,
-                ((sqrt3 - sqrt2) * s_minus - (sqrt2 + sqrt3) * s_plus) / 2,
-                (c_minus - c_plus) / 2,
-            ],
-            [
-                (c_minus - c_plus) / (2 * sqrt3),
-                ((sqrt2 - sqrt3) * s_minus + (sqrt2 + sqrt3) * s_plus) / 2,
-                (sqrt6 + 3) * c_plus / 6 - (sqrt6 - 3) * c_minus / 6,
-                ((sqrt2 - sqrt3) * s_minus - (sqrt2 + sqrt3) * s_plus) / 2,
-            ],
-            [
-                (s_minus - s_plus) / 2,
-                (c_minus - c_plus) / 2,
-                ((sqrt3 - sqrt2) * s_minus + (sqrt2 + sqrt3) * s_plus) / 2,
-                (c_minus + c_plus) / 2,
-            ],
-        ]))
+        D_real = simplify(
+            Matrix(
+                [
+                    [
+                        (sqrt6 + 3) * c_minus / 6 - (sqrt6 - 3) * c_plus / 6,
+                        -(s_minus + s_plus) / 2,
+                        (c_minus - c_plus) / (2 * sqrt3),
+                        (s_plus - s_minus) / 2,
+                    ],
+                    [
+                        (s_minus + s_plus) / 2,
+                        (c_minus + c_plus) / 2,
+                        ((sqrt3 - sqrt2) * s_minus - (sqrt2 + sqrt3) * s_plus) / 2,
+                        (c_minus - c_plus) / 2,
+                    ],
+                    [
+                        (c_minus - c_plus) / (2 * sqrt3),
+                        ((sqrt2 - sqrt3) * s_minus + (sqrt2 + sqrt3) * s_plus) / 2,
+                        (sqrt6 + 3) * c_plus / 6 - (sqrt6 - 3) * c_minus / 6,
+                        ((sqrt2 - sqrt3) * s_minus - (sqrt2 + sqrt3) * s_plus) / 2,
+                    ],
+                    [
+                        (s_minus - s_plus) / 2,
+                        (c_minus - c_plus) / 2,
+                        ((sqrt3 - sqrt2) * s_minus + (sqrt2 + sqrt3) * s_plus) / 2,
+                        (c_minus + c_plus) / 2,
+                    ],
+                ]
+            )
+        )
 
         U = PhaseShift(fock_cutoff=self.fock_cutoff).symbolic_matrix(phi)
         return U.adjoint() * D_real * U
@@ -518,11 +536,13 @@ class Displacement(CVOperation):
         wires = self.map_mode_to_wires(mode)
 
         if self.fock_cutoff == 2:
-            return QuantumScript([
-                qml.RZ(-phi, wires=wires[0]),
-                qml.RY(2 * r, wires=wires[0]),
-                qml.RZ(phi, wires=wires[0]),
-            ])
+            return QuantumScript(
+                [
+                    qml.RZ(-phi, wires=wires[0]),
+                    qml.RY(2 * r, wires=wires[0]),
+                    qml.RZ(phi, wires=wires[0]),
+                ]
+            )
 
         # cutoff == 4
         U = PhaseShift(fock_cutoff=self.fock_cutoff).gate_decomposition(phi, mode)
@@ -545,6 +565,7 @@ class Displacement(CVOperation):
 # ---------------------------------------------------------------------------
 # Squeeze  (Sgate)
 # ---------------------------------------------------------------------------
+
 
 class Squeeze(CVOperation):
     r"""Single-mode squeezing operator $S(\xi)$ with $\xi = r\,e^{i\varphi}$.
@@ -594,12 +615,14 @@ class Squeeze(CVOperation):
         if self.fock_cutoff == 2:
             return Matrix([[1, 0], [0, 1]])
 
-        return Matrix([
-            [cos(r / sqrt(2)), 0, exp(-I * phi) * sin(r / sqrt(2)), 0],
-            [0, cos(sqrt(Rational(3, 2)) * r), 0, exp(-I * phi) * sin(sqrt(Rational(3, 2)) * r)],
-            [-exp(I * phi) * sin(r / sqrt(2)), 0, cos(r / sqrt(2)), 0],
-            [0, -exp(I * phi) * sin(sqrt(Rational(3, 2)) * r), 0, cos(sqrt(Rational(3, 2)) * r)],
-        ])
+        return Matrix(
+            [
+                [cos(r / sqrt(2)), 0, exp(-I * phi) * sin(r / sqrt(2)), 0],
+                [0, cos(sqrt(Rational(3, 2)) * r), 0, exp(-I * phi) * sin(sqrt(Rational(3, 2)) * r)],
+                [-exp(I * phi) * sin(r / sqrt(2)), 0, cos(r / sqrt(2)), 0],
+                [0, -exp(I * phi) * sin(sqrt(Rational(3, 2)) * r), 0, cos(sqrt(Rational(3, 2)) * r)],
+            ]
+        )
 
     def numerical_matrix(self, r: float, phi: float) -> ComplexMatrix:
         """Numerical Fock-basis matrix for squeezing.
@@ -649,19 +672,22 @@ class Squeeze(CVOperation):
         theta = np.sqrt(2) * r
         thetap = np.sqrt(6) * r
 
-        return QuantumScript([
-            qml.RZ(np.pi - phi, wires[0]),
-            qml.CNOT(wires[::-1]),
-            qml.RY((theta - thetap) / 2, wires[0]),
-            qml.CNOT(wires[::-1]),
-            qml.RY((theta + thetap) / 2, wires[0]),
-            qml.RZ(phi - np.pi, wires[0]),
-        ])
+        return QuantumScript(
+            [
+                qml.RZ(np.pi - phi, wires[0]),
+                qml.CNOT(wires[::-1]),
+                qml.RY((theta - thetap) / 2, wires[0]),
+                qml.CNOT(wires[::-1]),
+                qml.RY((theta + thetap) / 2, wires[0]),
+                qml.RZ(phi - np.pi, wires[0]),
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------
 # SqueezedVacuum  (Squeezed, or Sgate acting on vacuum)
 # ---------------------------------------------------------------------------
+
 
 class SqueezedVacuum(CVOperation):
     r"""Squeezed vacuum state preparation $S(\xi)\,|0\rangle$ with $\xi = r\,e^{i\varphi}$.
@@ -759,15 +785,18 @@ class SqueezedVacuum(CVOperation):
         if self.fock_cutoff == 2:
             return QuantumScript([qml.Identity(wires=wires[0])])
 
-        return QuantumScript([
-            qml.RY(-np.sqrt(2) * r, wires[0]),
-            qml.PhaseShift(phi, wires[0]),
-        ])
+        return QuantumScript(
+            [
+                qml.RY(-np.sqrt(2) * r, wires[0]),
+                qml.PhaseShift(phi, wires[0]),
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------
 # BeamSplitter  (BSgate)
 # ---------------------------------------------------------------------------
+
 
 class BeamSplitter(CVOperation):
     r"""Beam splitter $\text{BS}(\theta, \phi)$.
@@ -807,17 +836,15 @@ class BeamSplitter(CVOperation):
         if self.fock_cutoff == 2:
             U = PhaseShift(fock_cutoff=self.fock_cutoff).symbolic_matrix(phi)
 
-            BS_real = Matrix([
-                [1, 0, 0, 0],
-                [0, cos(theta), -sin(theta), 0],
-                [0, sin(theta), cos(theta), 0],
-                [0, 0, 0, 1],
-            ])
-            return simplify(
-                kronecker_product(U.adjoint(),eye(2)) *
-                BS_real *
-                kronecker_product(U,eye(2))
+            BS_real = Matrix(
+                [
+                    [1, 0, 0, 0],
+                    [0, cos(theta), -sin(theta), 0],
+                    [0, sin(theta), cos(theta), 0],
+                    [0, 0, 0, 1],
+                ]
             )
+            return simplify(kronecker_product(U.adjoint(), eye(2)) * BS_real * kronecker_product(U, eye(2)))
 
         # cutoff == 4 — 16×16 matrix
         BS_real = zeros(16, 16)
@@ -827,69 +854,64 @@ class BeamSplitter(CVOperation):
         BS_real[1, 1] = cos(theta)
         BS_real[1, 4] = -sin(theta)
 
-        BS_real[2, 2] = (1 + cos(2*theta)) / 2
-        BS_real[2, 5] = -sqrt(2) * sin(2*theta) / 2
-        BS_real[2, 8] = Rational(1, 2) - cos(2*theta) / 2
+        BS_real[2, 2] = (1 + cos(2 * theta)) / 2
+        BS_real[2, 5] = -sqrt(2) * sin(2 * theta) / 2
+        BS_real[2, 8] = Rational(1, 2) - cos(2 * theta) / 2
 
-        BS_real[3, 3] = (3*cos(theta) + cos(3*theta)) / 4
-        BS_real[3, 6] = -sqrt(3) * (sin(theta) + sin(3*theta)) / 4
-        BS_real[3, 9] = sqrt(3) * (cos(theta) - cos(3*theta)) / 4
-        BS_real[3, 12] = (-3*sin(theta) + sin(3*theta)) / 4
+        BS_real[3, 3] = (3 * cos(theta) + cos(3 * theta)) / 4
+        BS_real[3, 6] = -sqrt(3) * (sin(theta) + sin(3 * theta)) / 4
+        BS_real[3, 9] = sqrt(3) * (cos(theta) - cos(3 * theta)) / 4
+        BS_real[3, 12] = (-3 * sin(theta) + sin(3 * theta)) / 4
 
         BS_real[4, 1] = sin(theta)
         BS_real[4, 4] = cos(theta)
 
-        BS_real[5, 2] = sqrt(2) * sin(2*theta) / 2
-        BS_real[5, 5] = cos(2*theta)
-        BS_real[5, 8] = -sqrt(2) * sin(2*theta) / 2
+        BS_real[5, 2] = sqrt(2) * sin(2 * theta) / 2
+        BS_real[5, 5] = cos(2 * theta)
+        BS_real[5, 8] = -sqrt(2) * sin(2 * theta) / 2
 
-        BS_real[6, 3] = sqrt(3) * (sin(theta) + sin(3*theta)) / 4
-        BS_real[6, 6] = (cos(theta) + 3*cos(3*theta)) / 4
-        BS_real[6, 9] = (sin(theta) - 3*sin(3*theta)) / 4
-        BS_real[6, 12] = sqrt(3) * (cos(theta) - cos(3*theta)) / 4
+        BS_real[6, 3] = sqrt(3) * (sin(theta) + sin(3 * theta)) / 4
+        BS_real[6, 6] = (cos(theta) + 3 * cos(3 * theta)) / 4
+        BS_real[6, 9] = (sin(theta) - 3 * sin(3 * theta)) / 4
+        BS_real[6, 12] = sqrt(3) * (cos(theta) - cos(3 * theta)) / 4
 
-        BS_real[7, 7] = (1 + cos(2*sqrt(3)*theta)) / 2
-        BS_real[7, 10] = -sqrt(2) * sin(2*sqrt(3)*theta) / 2
-        BS_real[7, 13] = (1 - cos(2*sqrt(3)*theta)) / 2
+        BS_real[7, 7] = (1 + cos(2 * sqrt(3) * theta)) / 2
+        BS_real[7, 10] = -sqrt(2) * sin(2 * sqrt(3) * theta) / 2
+        BS_real[7, 13] = (1 - cos(2 * sqrt(3) * theta)) / 2
 
-        BS_real[8, 2] = (1 - cos(2*theta)) / 2
-        BS_real[8, 5] = sqrt(2) * sin(2*theta) / 2
-        BS_real[8, 8] = (1 + cos(2*theta)) / 2
+        BS_real[8, 2] = (1 - cos(2 * theta)) / 2
+        BS_real[8, 5] = sqrt(2) * sin(2 * theta) / 2
+        BS_real[8, 8] = (1 + cos(2 * theta)) / 2
 
-        BS_real[9, 3] = sqrt(3) * (cos(theta) - cos(3*theta)) / 4
-        BS_real[9, 6] = (-sin(theta) + 3*sin(3*theta)) / 4
-        BS_real[9, 9] = (cos(theta) + 3*cos(3*theta)) / 4
-        BS_real[9, 12] = -sqrt(3) * (sin(theta) + sin(3*theta)) / 4
+        BS_real[9, 3] = sqrt(3) * (cos(theta) - cos(3 * theta)) / 4
+        BS_real[9, 6] = (-sin(theta) + 3 * sin(3 * theta)) / 4
+        BS_real[9, 9] = (cos(theta) + 3 * cos(3 * theta)) / 4
+        BS_real[9, 12] = -sqrt(3) * (sin(theta) + sin(3 * theta)) / 4
 
-        BS_real[10, 7] = sqrt(2) * sin(2*sqrt(3)*theta) / 2
-        BS_real[10, 10] = cos(2*sqrt(3)*theta)
-        BS_real[10, 13] = -sqrt(2) * sin(2*sqrt(3)*theta) / 2
+        BS_real[10, 7] = sqrt(2) * sin(2 * sqrt(3) * theta) / 2
+        BS_real[10, 10] = cos(2 * sqrt(3) * theta)
+        BS_real[10, 13] = -sqrt(2) * sin(2 * sqrt(3) * theta) / 2
 
-        BS_real[11, 11] = cos(3*theta)
-        BS_real[11, 14] = -sin(3*theta)
+        BS_real[11, 11] = cos(3 * theta)
+        BS_real[11, 14] = -sin(3 * theta)
 
-        BS_real[12, 3] = (3*sin(theta) - sin(3*theta)) / 4
-        BS_real[12, 6] = sqrt(3) * (cos(theta) - cos(3*theta)) / 4
-        BS_real[12, 9] = sqrt(3) * (sin(theta) + sin(3*theta)) / 4
-        BS_real[12, 12] = (3*cos(theta) + cos(3*theta)) / 4
+        BS_real[12, 3] = (3 * sin(theta) - sin(3 * theta)) / 4
+        BS_real[12, 6] = sqrt(3) * (cos(theta) - cos(3 * theta)) / 4
+        BS_real[12, 9] = sqrt(3) * (sin(theta) + sin(3 * theta)) / 4
+        BS_real[12, 12] = (3 * cos(theta) + cos(3 * theta)) / 4
 
-        BS_real[13, 7] = (1 - cos(2*sqrt(3)*theta)) / 2
-        BS_real[13, 10] = sqrt(2) * sin(2*sqrt(3)*theta) / 2
-        BS_real[13, 13] = (1 + cos(2*sqrt(3)*theta)) / 2
+        BS_real[13, 7] = (1 - cos(2 * sqrt(3) * theta)) / 2
+        BS_real[13, 10] = sqrt(2) * sin(2 * sqrt(3) * theta) / 2
+        BS_real[13, 13] = (1 + cos(2 * sqrt(3) * theta)) / 2
 
-        BS_real[14, 11] = sin(3*theta)
-        BS_real[14, 14] = cos(3*theta)
+        BS_real[14, 11] = sin(3 * theta)
+        BS_real[14, 14] = cos(3 * theta)
 
         BS_real[15, 15] = 1
 
         U = PhaseShift(fock_cutoff=self.fock_cutoff).symbolic_matrix(phi)
 
-        return simplify(
-            kronecker_product(U.adjoint(),eye(4)) *
-            BS_real *
-            kronecker_product(U,eye(4))
-        )
-
+        return simplify(kronecker_product(U.adjoint(), eye(4)) * BS_real * kronecker_product(U, eye(4)))
 
     def numerical_matrix(self, theta: float, phi: float) -> ComplexMatrix:
         """Numerical two-mode Fock-basis matrix of the beam splitter.
@@ -952,13 +974,13 @@ class BeamSplitter(CVOperation):
             all_gates.extend(list(U.gate_decomposition(phi, modes[0])))
             all_gates.extend(
                 [
-                qml.Hadamard(wires=wires[0]),
-                qml.CNOT(wires=wires),
-                qml.RY(-theta, wires=wires[0]),
-                qml.RY(-theta, wires=wires[1]),
-                qml.CNOT(wires=wires),
-                qml.Hadamard(wires=wires[0]),
-            ]
+                    qml.Hadamard(wires=wires[0]),
+                    qml.CNOT(wires=wires),
+                    qml.RY(-theta, wires=wires[0]),
+                    qml.RY(-theta, wires=wires[1]),
+                    qml.CNOT(wires=wires),
+                    qml.Hadamard(wires=wires[0]),
+                ]
             )
             all_gates.extend(list(U.gate_decomposition(phi, modes[0]).adjoint()))
 
@@ -978,9 +1000,7 @@ class BeamSplitter(CVOperation):
         # ):
         #     all_gates.extend(list(layer(theta, modes)))
 
-        all_gates.extend(list(self._gate_decomposition_cutoff4(
-            theta, modes, even_input, low_photon
-        )))
+        all_gates.extend(list(self._gate_decomposition_cutoff4(theta, modes, even_input, low_photon)))
 
         all_gates.extend(list(U.gate_decomposition(phi, modes[0]).adjoint()))
         return QuantumScript(all_gates)
@@ -988,151 +1008,149 @@ class BeamSplitter(CVOperation):
     # -- Private layer methods (cutoff=4) ----------------------------------
     def _gate_decomposition_U1(self, theta: float, modes: tuple[int, int]) -> QuantumScript:
         w = self.map_mode_to_wires(modes[0]) + self.map_mode_to_wires(modes[1])
-        return QuantumScript([
-            qml.CNOT(wires=[w[1], w[3]]),
-            qml.ctrl(
-                qml.RY(2*theta, wires=w[1]),
-                control=[w[0], w[2], w[3]],
-                control_values=[0, 0, 1],
-            ),
-            qml.CNOT(wires=[w[1], w[3]]),
-        ])
+        return QuantumScript(
+            [
+                qml.CNOT(wires=[w[1], w[3]]),
+                qml.ctrl(
+                    qml.RY(2 * theta, wires=w[1]),
+                    control=[w[0], w[2], w[3]],
+                    control_values=[0, 0, 1],
+                ),
+                qml.CNOT(wires=[w[1], w[3]]),
+            ]
+        )
 
     def _gate_decomposition_U2(self, theta: float, modes: tuple[int, int]) -> QuantumScript:
         w = self.map_mode_to_wires(modes[0]) + self.map_mode_to_wires(modes[1])
-        return QuantumScript([
-            # basis change (CNOTs followed by X on w2, w3)
-            qml.CNOT(wires=[w[3], w[0]]),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.ctrl(qml.PauliX(wires=w[1]), control=w[3], control_values=0),
-            qml.X(wires=w[2]),
-            # X(w3) of the basis change cancels the X(w3) that opens W^\dagger
-
-            # W^\dagger (without its leading X(w3))
-            qml.CRY(-np.pi / 2, wires=[w[3], w[2]]),
-            qml.CNOT(wires=[w[2], w[3]]),
-
-            qml.ctrl(
-                qml.RY(2*theta, wires=w[2]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-            qml.ctrl(
-                qml.RY(2*theta, wires=w[3]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-
-            # W (without its trailing X(w3), cancelled against the basis change)
-            qml.CNOT(wires=[w[2], w[3]]),
-            qml.CRY(np.pi / 2, wires=[w[3], w[2]]),
-
-            # undo basis change
-            qml.X(wires=w[2]),
-            qml.ctrl(qml.PauliX(wires=w[1]), control=w[3], control_values=0),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.CNOT(wires=[w[3], w[0]]),
-        ])
+        return QuantumScript(
+            [
+                # basis change (CNOTs followed by X on w2, w3)
+                qml.CNOT(wires=[w[3], w[0]]),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.ctrl(qml.PauliX(wires=w[1]), control=w[3], control_values=0),
+                qml.X(wires=w[2]),
+                # X(w3) of the basis change cancels the X(w3) that opens W^\dagger
+                # W^\dagger (without its leading X(w3))
+                qml.CRY(-np.pi / 2, wires=[w[3], w[2]]),
+                qml.CNOT(wires=[w[2], w[3]]),
+                qml.ctrl(
+                    qml.RY(2 * theta, wires=w[2]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                qml.ctrl(
+                    qml.RY(2 * theta, wires=w[3]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                # W (without its trailing X(w3), cancelled against the basis change)
+                qml.CNOT(wires=[w[2], w[3]]),
+                qml.CRY(np.pi / 2, wires=[w[3], w[2]]),
+                # undo basis change
+                qml.X(wires=w[2]),
+                qml.ctrl(qml.PauliX(wires=w[1]), control=w[3], control_values=0),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.CNOT(wires=[w[3], w[0]]),
+            ]
+        )
 
     def _gate_decomposition_U3(self, theta: float, modes: tuple[int, int]) -> QuantumScript:
         w = self.map_mode_to_wires(modes[0]) + self.map_mode_to_wires(modes[1])
         # B = RZ(alpha) RY(beta) RZ(alpha); arctan2 keeps the correct branch for cos(2θ) < 0
-        alpha = np.arctan2(-np.sqrt(3) * np.sin(2*theta), 2 * np.cos(2*theta))
-        beta = 2.0 * np.arcsin(np.clip(0.5 * np.sin(2*theta), -1.0, 1.0))
-        return QuantumScript([
-            # basis change
-            qml.CNOT(wires=[w[3], w[1]]),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.X(wires=w[2]),
-            qml.X(wires=w[3]),
-
-            # into the magic basis
-            qml.S(wires=w[2]),
-            qml.S(wires=w[3]),
-            qml.H(wires=w[3]),
-            qml.CNOT(wires=[w[3], w[2]]),
-
-            qml.ctrl(
-                qml.RY(2*theta, wires=w[2]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-            qml.ctrl(
-                qml.RZ(alpha, wires=w[3]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-            qml.ctrl(
-                qml.RY(beta, wires=w[3]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-            qml.ctrl(
-                qml.RZ(alpha, wires=w[3]),
-                control=[w[0], w[1]],
-                control_values=[1, 1],
-            ),
-
-            # out of the magic basis (exact inverse: S^\dagger, not S)
-            qml.CNOT(wires=[w[3], w[2]]),
-            qml.H(wires=w[3]),
-            qml.adjoint(qml.S(wires=w[2])),
-            qml.adjoint(qml.S(wires=w[3])),
-
-            # undo basis change
-            qml.X(wires=w[2]),
-            qml.X(wires=w[3]),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.CNOT(wires=[w[3], w[1]]),
-        ])
+        alpha = np.arctan2(-np.sqrt(3) * np.sin(2 * theta), 2 * np.cos(2 * theta))
+        beta = 2.0 * np.arcsin(np.clip(0.5 * np.sin(2 * theta), -1.0, 1.0))
+        return QuantumScript(
+            [
+                # basis change
+                qml.CNOT(wires=[w[3], w[1]]),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.X(wires=w[2]),
+                qml.X(wires=w[3]),
+                # into the magic basis
+                qml.S(wires=w[2]),
+                qml.S(wires=w[3]),
+                qml.H(wires=w[3]),
+                qml.CNOT(wires=[w[3], w[2]]),
+                qml.ctrl(
+                    qml.RY(2 * theta, wires=w[2]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                qml.ctrl(
+                    qml.RZ(alpha, wires=w[3]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                qml.ctrl(
+                    qml.RY(beta, wires=w[3]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                qml.ctrl(
+                    qml.RZ(alpha, wires=w[3]),
+                    control=[w[0], w[1]],
+                    control_values=[1, 1],
+                ),
+                # out of the magic basis (exact inverse: S^\dagger, not S)
+                qml.CNOT(wires=[w[3], w[2]]),
+                qml.H(wires=w[3]),
+                qml.adjoint(qml.S(wires=w[2])),
+                qml.adjoint(qml.S(wires=w[3])),
+                # undo basis change
+                qml.X(wires=w[2]),
+                qml.X(wires=w[3]),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.CNOT(wires=[w[3], w[1]]),
+            ]
+        )
 
     def _gate_decomposition_U4(self, theta: float, modes: tuple[int, int]) -> QuantumScript:
         w = self.map_mode_to_wires(modes[0]) + self.map_mode_to_wires(modes[1])
-        return QuantumScript([
-            # basis change (ordinary CNOT on w1, not anti-controlled)
-            qml.CNOT(wires=[w[3], w[0]]),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.CNOT(wires=[w[3], w[1]]),
-
-            # W^\dagger
-            qml.X(wires=w[3]),
-            qml.CRY(-np.pi / 2, wires=[w[3], w[2]]),
-            qml.CNOT(wires=[w[2], w[3]]),
-
-            # controls on |00>; negative angle because the basis order is reversed
-            qml.ctrl(
-                qml.RY(-2*np.sqrt(3)*theta, wires=w[2]),
-                control=[w[0], w[1]],
-                control_values=[0, 0],
-            ),
-            qml.ctrl(
-                qml.RY(-2*np.sqrt(3)*theta, wires=w[3]),
-                control=[w[0], w[1]],
-                control_values=[0, 0],
-            ),
-
-            # W
-            qml.CNOT(wires=[w[2], w[3]]),
-            qml.CRY(np.pi / 2, wires=[w[3], w[2]]),
-            qml.X(wires=w[3]),
-
-            # undo basis change
-            qml.CNOT(wires=[w[3], w[1]]),
-            qml.CNOT(wires=[w[2], w[0]]),
-            qml.CNOT(wires=[w[3], w[0]]),
-        ])
+        return QuantumScript(
+            [
+                # basis change (ordinary CNOT on w1, not anti-controlled)
+                qml.CNOT(wires=[w[3], w[0]]),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.CNOT(wires=[w[3], w[1]]),
+                # W^\dagger
+                qml.X(wires=w[3]),
+                qml.CRY(-np.pi / 2, wires=[w[3], w[2]]),
+                qml.CNOT(wires=[w[2], w[3]]),
+                # controls on |00>; negative angle because the basis order is reversed
+                qml.ctrl(
+                    qml.RY(-2 * np.sqrt(3) * theta, wires=w[2]),
+                    control=[w[0], w[1]],
+                    control_values=[0, 0],
+                ),
+                qml.ctrl(
+                    qml.RY(-2 * np.sqrt(3) * theta, wires=w[3]),
+                    control=[w[0], w[1]],
+                    control_values=[0, 0],
+                ),
+                # W
+                qml.CNOT(wires=[w[2], w[3]]),
+                qml.CRY(np.pi / 2, wires=[w[3], w[2]]),
+                qml.X(wires=w[3]),
+                # undo basis change
+                qml.CNOT(wires=[w[3], w[1]]),
+                qml.CNOT(wires=[w[2], w[0]]),
+                qml.CNOT(wires=[w[3], w[0]]),
+            ]
+        )
 
     def _gate_decomposition_U5(self, theta: float, modes: tuple[int, int]) -> QuantumScript:
         w = self.map_mode_to_wires(modes[0]) + self.map_mode_to_wires(modes[1])
-        return QuantumScript([
-            qml.CNOT(wires=[w[1], w[3]]),
-            qml.ctrl(
-                qml.RY(6*theta, wires=w[1]),
-                control=[w[0], w[2], w[3]],
-                control_values=[1, 1, 1],
-            ),
-            qml.CNOT(wires=[w[1], w[3]]),
-        ])
+        return QuantumScript(
+            [
+                qml.CNOT(wires=[w[1], w[3]]),
+                qml.ctrl(
+                    qml.RY(6 * theta, wires=w[1]),
+                    control=[w[0], w[2], w[3]],
+                    control_values=[1, 1, 1],
+                ),
+                qml.CNOT(wires=[w[1], w[3]]),
+            ]
+        )
 
     def _gate_decomposition_cutoff4(
         self,
@@ -1170,30 +1188,55 @@ class BeamSplitter(CVOperation):
             g.extend([qml.S(q2), qml.S(q3), qml.H(q3), qml.CNOT(wires=[q3, q2])])
 
         def magic_dag():
-            g.extend([qml.CNOT(wires=[q3, q2]), qml.H(q3),
-                      qml.adjoint(qml.S(q2)), qml.adjoint(qml.S(q3))])
+            g.extend([qml.CNOT(wires=[q3, q2]), qml.H(q3), qml.adjoint(qml.S(q2)), qml.adjoint(qml.S(q3))])
 
         def cry(phi, control, target):  # controlled RY, 2 CNOTs
-            g.extend([qml.RY(phi / 2, wires=target), qml.CNOT(wires=[control, target]),
-                      qml.RY(-phi / 2, wires=target), qml.CNOT(wires=[control, target])])
+            g.extend(
+                [
+                    qml.RY(phi / 2, wires=target),
+                    qml.CNOT(wires=[control, target]),
+                    qml.RY(-phi / 2, wires=target),
+                    qml.CNOT(wires=[control, target]),
+                ]
+            )
 
         def ucry(xi_p, xi_m, target):
             # RY(2(xi_p+xi_m)) on (q0,q1)=00, RY(2(xi_p-xi_m)) on 10, I if q1=1
             if even_input:  # q1 = 0: CNOT(q1 -> target) are identities
-                g.extend([qml.RY(2 * xi_p, wires=target), qml.CNOT(wires=[q0, target]),
-                          qml.RY(2 * xi_m, wires=target), qml.CNOT(wires=[q0, target])])
+                g.extend(
+                    [
+                        qml.RY(2 * xi_p, wires=target),
+                        qml.CNOT(wires=[q0, target]),
+                        qml.RY(2 * xi_m, wires=target),
+                        qml.CNOT(wires=[q0, target]),
+                    ]
+                )
                 return
-            g.extend([qml.RY(xi_p, wires=target), qml.CNOT(wires=[q1, target]),
-                      qml.RY(xi_p, wires=target), qml.CNOT(wires=[q0, target]),
-                      qml.RY(xi_m, wires=target), qml.CNOT(wires=[q1, target]),
-                      qml.RY(xi_m, wires=target), qml.CNOT(wires=[q0, target])])
+            g.extend(
+                [
+                    qml.RY(xi_p, wires=target),
+                    qml.CNOT(wires=[q1, target]),
+                    qml.RY(xi_p, wires=target),
+                    qml.CNOT(wires=[q0, target]),
+                    qml.RY(xi_m, wires=target),
+                    qml.CNOT(wires=[q1, target]),
+                    qml.RY(xi_m, wires=target),
+                    qml.CNOT(wires=[q0, target]),
+                ]
+            )
 
         def ocry(phi, target):  # RY(phi) if q1 = 0, I if q1 = 1 (2 CNOTs)
             if even_input:  # q1 = 0: the control is always satisfied
                 g.append(qml.RY(phi, wires=target))
                 return
-            g.extend([qml.RY(phi / 2, wires=target), qml.CNOT(wires=[q1, target]),
-                      qml.RY(phi / 2, wires=target), qml.CNOT(wires=[q1, target])])
+            g.extend(
+                [
+                    qml.RY(phi / 2, wires=target),
+                    qml.CNOT(wires=[q1, target]),
+                    qml.RY(phi / 2, wires=target),
+                    qml.CNOT(wires=[q1, target]),
+                ]
+            )
 
         if even_input:
             # q3 = 0: CX(q3->q1) and CX(q3->q0) are identities; q1 = 0: V_odd
@@ -1240,3 +1283,95 @@ class BeamSplitter(CVOperation):
         # undo the frame (kept for even_input: the output has odd photon numbers)
         g.extend([qml.CNOT(wires=[q3, q0]), qml.CNOT(wires=[q3, q1]), qml.CNOT(wires=[q2, q0])])
         return QuantumScript(g)
+
+
+# ---------------------------------------------------------------------------
+# Fock state preparation  (Fock)
+# ---------------------------------------------------------------------------
+
+
+class Fock(CVOperation):
+    r"""
+    TODO(TR): Revise whole documentation, to match Fock operation. Squeezed vacuum documentation was copied as the
+    content reference.
+
+    Squeezed vacuum state preparation $S(\xi)\,|0\rangle$ with $\xi = r\,e^{i\varphi}$.
+
+    Simplified version of :class:`Squeeze` valid **only** when the mode is
+    in vacuum.  Only the first column of $S(\xi)$ is reproduced, so the
+    resulting circuit is a state preparation, not the full squeezing unitary.
+
+    Corresponds to ``Squeezed`` in Blackbird, and to ``Sgate`` when it is the
+    first operation on its mode.
+
+    Parameters
+    ----------
+    fock_cutoff : int
+        Fock-space truncation (2 or 4).
+
+    Notes
+    -----
+    For ``cutoff=4`` the prepared state is
+
+    $$
+    \cos(r/\sqrt{2})\,|0\rangle - e^{i\varphi}\sin(r/\sqrt{2})\,|2\rangle,
+    $$
+
+    which in the binary encoding (MSB first) only acts on the first wire of
+    the mode.  For ``cutoff=2`` the state is the vacuum.
+
+    Examples
+    --------
+    >>> sv = SqueezedVacuum(fock_cutoff=4)
+    >>> sv.numerical_state(r=0.5, phi=0.0)
+    """
+
+    def symbolic_state(self, n_photons: Symbol) -> Matrix:
+        raise NotImplementedError("Implement it, once needed.")
+
+    def symbolic_matrix(self, n_photons: int) -> Matrix:
+        raise NotImplementedError("Implement it, once needed.")
+
+    def numerical_state(self, n_photons: int) -> NDArray[np.complexfloating]:
+        raise NotImplementedError("Implement it, once needed.")
+
+    def gate_decomposition(self, n_photons: int, mode: int) -> QuantumScript:
+        r"""Decompose the squeezed vacuum preparation into qubit gates.
+
+        Parameters
+        ----------
+        n_photons : int
+            Number of photons.
+        mode : int
+            Target optical mode.
+
+        Returns
+        -------
+        QuantumScript
+            Qubit circuit (global phase discarded).
+
+        Notes
+        -----
+        * ``n_photons=0`` — identity (no gates).
+        * ``otherwise`` — ``X`` gate applied on every qubit $i$, if ``bin(n_photons)[2:][i]`` == 1.
+        """
+        wires = self.map_mode_to_wires(mode)
+
+        if not 0 < n_photons < 2 ** len(wires) - 1:
+            raise ValueError(
+                f"Too many photons requested for the given cutoff. Got {n_photons}, but {2 ** len(wires) - 1} possible."
+            )
+
+        if n_photons == 0:
+            return QuantumScript([qml.Identity(wires=wires)])
+
+        operations: list = []
+
+        # TODO(TR): Ensure that's a correct convention. Reverse if needed.
+        n_photons_binary: str = format(n_photons, f"0{len(wires)}b")
+
+        for i, digit in enumerate(n_photons_binary):
+            if digit == "1":
+                operations.append(qml.X(wires=wires[i]))
+
+        return QuantumScript(operations)

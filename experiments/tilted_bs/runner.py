@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pennylane as qml
@@ -47,6 +48,22 @@ def compute_noiseless_probs(open_qasm: str) -> dict[str, float]:
     return filter_probs(probs_dict)
 
 
+def compute_noiseless_probs_from_counts(qasm: str, shots: int = 10_000) -> dict[str, float]:
+    template = qml.from_qasm(qasm, measurements=[])
+
+    dev = qml.device("default.qubit", wires=4, shots=shots)
+
+    @qml.qnode(dev)
+    def circuit():
+        template()
+        return qml.counts(wires=range(4))
+
+    counts = circuit()
+    total = sum(counts.values())
+
+    return filter_probs({str(state): float(count / total) for state, count in counts.items()})
+
+
 def filter_probs(probs: dict[str, float]) -> dict[str, float]:
 
     return {k: v for k, v in probs.items() if v > 1e-20}
@@ -58,6 +75,7 @@ def main() -> None:
     # print(theoretical_counts(np.pi / 4))
 
     results: dict[int, dict[str, dict[str, float]]] = {}
+    n_samples: int = 10_000
 
     for n in range(17):
         results[n] = {}
@@ -67,11 +85,15 @@ def main() -> None:
         open_qasm_circuit: str = create_openqasm_circuit(create_bb_circuit(theta))
         results[n]["theoretical"] = compute_theoretical_probs(theta)
         results[n]["noiseless"] = compute_noiseless_probs(open_qasm_circuit)
+        results[n][f"noiseless-{n_samples}-samples"] = compute_noiseless_probs_from_counts(open_qasm_circuit, n_samples)
 
         print(f"\t{results[n]['theoretical']}")
         print(f"\t{results[n]['noiseless']}")
+        print(f"\t{results[n][f'noiseless-{n_samples}-samples']}")
 
-    with open("tilted_bs_results.json", "w") as f:
+    output = Path(__file__).with_name("tilted_bs_results.json")
+
+    with open(output, "w") as f:
         json.dump(results, f, indent=4)
 
 

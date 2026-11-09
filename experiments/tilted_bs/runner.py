@@ -156,6 +156,60 @@ def filter_probs(probs: dict[str, float]) -> dict[str, float]:
     return {k: v for k, v in probs.items() if v > 1e-20}
 
 
+def counts_to_statevector(counts: dict[str, float]) -> NDArray[np.complexfloating]:
+    """
+    Creates a statevector with amplitudes ``sqrt(p)`` out of ``counts`` (or probabilities; the values get normalized).
+
+    The keys are expected to be ``q0q1...`` bitstrings, as in the rest of the runner, so the result follows the
+    PennyLane ordering (wire 0 is the most significant bit of the index). Counts carry no phase information, hence
+    all the amplitudes are real and non-negative.
+    """
+    if not counts:
+        raise ValueError("Cannot create a statevector out of empty counts.")
+
+    n_qubits: int = len(next(iter(counts)))
+    state: NDArray[np.complexfloating] = np.zeros(2**n_qubits, dtype=np.complex128)
+
+    for bitstring, count in counts.items():
+        if len(bitstring) != n_qubits:
+            raise ValueError(f"Inconsistent bitstring lengths: expected {n_qubits}, got '{bitstring}'.")
+        if count < 0:
+            raise ValueError(f"Negative count for '{bitstring}': {count}.")
+        state[int(bitstring, 2)] = np.sqrt(count)
+
+    norm = np.linalg.norm(state)
+
+    if norm == 0:
+        raise ValueError("Cannot create a statevector out of all-zero counts.")
+
+    return state / norm
+
+
+def compute_fidelity_with_theory(probs: dict[str, float], theta: float) -> float:
+    """
+    Computes the fidelity between the state reconstructed from ``probs`` (e.g. the raw or the noise-mitigated VLQ
+    simulation results) and the theoretical state for the tilted beam-splitter with parameter ``theta``.
+
+    Both states are created with :func:`counts_to_statevector`, so they carry no phases and the result is the
+    classical fidelity ``(sum_i sqrt(p_i * q_i))^2`` of the two distributions.
+    """
+    state: NDArray[np.complexfloating] = counts_to_statevector(probs)
+    theoretical_state: NDArray[np.complexfloating] = counts_to_statevector(compute_theoretical_probs(theta))
+
+    return float(qml.math.fidelity_statevector(state, theoretical_state))
+
+
+def compute_fidelity_stderr(fidelity: float, n_samples: int) -> float:
+    """
+    Computes the standard error ``sqrt(F * (1 - F) / n_samples)`` of the ``fidelity`` estimated from ``n_samples``.
+
+    It's the first-order (delta method) propagation of the multinomial shot noise, assuming that every outcome
+    allowed by the theory has been observed. For the noise-mitigated results it's only an approximation.
+    """
+    # The fidelity can land a rounding error above 1, hence the max.
+    return float(np.sqrt(max(fidelity * (1 - fidelity), 0.0) / n_samples))
+
+
 def add_multinomial_stdevs(step_results: dict[str, dict[str, float]], n_samples: int) -> None:
     """Extends ``step_results`` with a ``<name>-stdev`` entry for every series other than the theoretical one."""
     for name, probs in list(step_results.items()):
@@ -172,6 +226,7 @@ def main() -> None:
     # print(theoretical_counts(np.pi / 4))
 
     results: dict[int, dict[str, dict[str, float]]] = {}
+    fidelity: dict[int, dict[str, float]] = {}
     n_samples: int = 10_000
 
     for n in range(17):
@@ -189,16 +244,32 @@ def main() -> None:
         )
         add_multinomial_stdevs(results[n], n_samples)
 
+        fidelity[n] = {
+            "noiseless": compute_fidelity_with_theory(results[n][f"noiseless-{n_samples}-samples"], theta),
+            "noisy": compute_fidelity_with_theory(results[n][f"noisy-vlq-{n_samples}-samples"], theta),
+            "mitigated": compute_fidelity_with_theory(results[n]["noise_mitigated_noisy_vql"], theta),
+        }
+
+        for name in ("noiseless", "noisy", "mitigated"):
+            fidelity[n][f"{name}-stderr"] = compute_fidelity_stderr(fidelity[n][name], n_samples)
+
         print(f"\t{results[n]['theoretical']}")
         print(f"\t{results[n]['noiseless']}")
         print(f"\t{results[n][f'noiseless-{n_samples}-samples']}")
         print(f"\t{results[n][f'noisy-vlq-{n_samples}-samples']}")
         print(f"\t{results[n]['noise_mitigated_noisy_vql']}")
 
+        print(f"\t{fidelity[n]}")
+
     output = Path(__file__).with_name("tilted_bs_results.json")
 
     with open(output, "w") as f:
         json.dump(results, f, indent=4)
+
+    fidelity_output = Path(__file__).with_name("tilted_bs_fidelity.json")
+
+    with open(fidelity_output, "w") as f:
+        json.dump(fidelity, f, indent=4)
 
 
 if __name__ == "__main__":

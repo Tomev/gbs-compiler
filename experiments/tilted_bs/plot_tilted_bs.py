@@ -128,7 +128,7 @@ def build_figure(data: Results) -> go.Figure:
     for row, state in enumerate(states, start=1):
         add_state_panel(fig, data, steps, series_names, state, row)
 
-    fig.update_xaxes(title_text="Index", dtick=2, row=rows, col=1)
+    fig.update_xaxes(title_text="n (θ = n π / 32)", dtick=2, row=rows, col=1)
     apply_layout(fig, plot_height)
 
     return fig

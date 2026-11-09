@@ -9,6 +9,7 @@ from iqm.qiskit_iqm import transpile_to_IQM
 from iqm.qiskit_iqm.fake_backends.iqm_fake_backend import (
     IQMFakeBackend,
 )
+from iqm_benchmark.selector import IQMStarCostEvaluator
 from iqm_benchmark.simulator import FakeFromDicts
 from mthree import M3Mitigation
 from numpy.typing import NDArray
@@ -17,7 +18,8 @@ from qiskit import QuantumCircuit
 from gbs_compiler import CompilerGBS
 
 
-def create_noisy_vlq_sim() -> IQMFakeBackend:
+def _load_vlq_dicts() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Loads the VLQ architecture, calibration and quality metrics dicts, in that order."""
     architecture_dict_path = Path(__file__).with_name("vlq_dynamic_architecture.json")
     calibration_dict_path = Path(__file__).with_name("vlq_calibration.json")
     metrics_dict_path = Path(__file__).with_name("vlq_metrics.json")
@@ -26,7 +28,48 @@ def create_noisy_vlq_sim() -> IQMFakeBackend:
     calibration_dict: dict[str, Any] = json.loads(calibration_dict_path.read_text())
     metrics_dict: dict[str, Any] = json.loads(metrics_dict_path.read_text())
 
-    return FakeFromDicts(architecture_dict, calibration_dict, metrics_dict, "FakeVLQ")
+    return architecture_dict, calibration_dict, metrics_dict
+
+
+def create_noisy_vlq_sim() -> IQMFakeBackend:
+    return FakeFromDicts(*_load_vlq_dicts(), "FakeVLQ")
+
+
+def select_layouts(open_qasm: str, n_layouts: int = 1) -> list[tuple[tuple[int, ...], float]]:
+    """
+    Finds the ``n_layouts`` VLQ qubit layouts with the lowest cost (sum of the operation errors) for the ``open_qasm``
+    circuit. Returns ``(layout, cost)`` pairs, cheapest first, where ``layout[i]`` is the physical qubit index of the
+    i-th circuit qubit.
+
+    The search goes through every ordered choice of the circuit qubits out of the device qubits, so it's slow (hours
+    for 4 qubits on VLQ).
+    """
+    evaluator: IQMStarCostEvaluator = IQMStarCostEvaluator(*_load_vlq_dicts(), QuantumCircuit.from_qasm_str(open_qasm))
+
+    return evaluator.get_top_layouts(n_layouts)
+
+
+def run_layout_search(
+    steps: tuple[int, ...] = (4, 12), n_layouts: int = 10
+) -> dict[int, list[tuple[tuple[int, ...], float]]]:
+    """
+    Runs the layout search for the tilted beam-splitter circuits with ``theta = n * pi / 32``, for every ``n`` in
+    ``steps``, and saves the ``n_layouts`` best ``(layout, cost)`` pairs of each to ``tilted_bs_layouts.json``.
+
+    The file is rewritten after every step, as a single search takes hours.
+    """
+    layouts: dict[int, list[tuple[tuple[int, ...], float]]] = {}
+    output = Path(__file__).with_name("tilted_bs_layouts.json")
+
+    for n in steps:
+        print(f"Layout search for theta = {n} pi / 32")
+        layouts[n] = select_layouts(create_openqasm_circuit(create_bb_circuit(n * np.pi / 32)), n_layouts)
+        print(f"\t{layouts[n]}")
+
+        with open(output, "w") as f:
+            json.dump(layouts, f, indent=4)
+
+    return layouts
 
 
 def _get_qubit_measurement_error_matrices() -> dict[str, NDArray[np.floating]]:
@@ -274,5 +317,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     print("Start")
-    main()
+    # main()
+    run_layout_search()
     print("End")

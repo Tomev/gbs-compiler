@@ -24,6 +24,7 @@ Issues = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler/issues"
 
 [project.optional-dependencies]
 exp = [
+    "iqm-research-award-2026 ; python_full_version >= '3.13'",
     "plotly>=7.1.0",
 ]
 
@@ -64,3 +65,6 @@ addopts = "-v --tb=short"
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.uv.sources]
+iqm-research-award-2026 = { git = "https://github.com/Tomev/IQM_Research_Award_2026" }

@@ -148,25 +148,6 @@ def apply_noise_mitigation(probs: dict[str, float], n_shots: int = 10_000) -> di
     quasi = m3.apply_correction(counts, range(len(layout)))
     probs = quasi.nearest_probability_distribution()
 
-    """
-    mitigated_counts = []
-
-    for i in range(len(probs)):
-        n_shots: int = sum([v for v in counts[i].values()])
-        mitigated_counts.append({})
-
-        for k, v in probs[i].items():
-            mitigated_counts[-1][k] = int(v * n_shots)
-
-    # for i in range(len(counts)):
-    #    print(f"{i}:\n\t{counts[i]}\n\t{mitigated_counts[i]}")
-
-    # Apply mitigated counts
-    for i in range(len(summed_counts.raw_results)):
-        for state in STATES_ORDER:
-            summed_counts.raw_results.loc[i, state] = mitigated_counts[i][str(state)]
-    """
-
     return filter_probs({k: float(v) for k, v in probs.items()})
 
 

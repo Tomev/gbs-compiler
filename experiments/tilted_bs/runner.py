@@ -156,6 +156,16 @@ def filter_probs(probs: dict[str, float]) -> dict[str, float]:
     return {k: v for k, v in probs.items() if v > 1e-20}
 
 
+def add_multinomial_stdevs(step_results: dict[str, dict[str, float]], n_samples: int) -> None:
+    """Extends ``step_results`` with a ``<name>-stdev`` entry for every series other than the theoretical one."""
+    for name, probs in list(step_results.items()):
+        if name != "theoretical":
+            # Exact simulations can land a rounding error above 1, hence the max.
+            step_results[f"{name}-stdev"] = {
+                state: float(np.sqrt(max(p * (1 - p), 0.0) / n_samples)) for state, p in probs.items()
+            }
+
+
 def main() -> None:
     # print(create_bb_circuit(np.pi / 4))
     # print(create_openqasm_circuit(create_bb_circuit(np.pi / 4)))
@@ -177,6 +187,7 @@ def main() -> None:
         results[n]["noise_mitigated_noisy_vql"] = apply_noise_mitigation(
             results[n][f"noisy-vlq-{n_samples}-samples"], n_samples
         )
+        add_multinomial_stdevs(results[n], n_samples)
 
         print(f"\t{results[n]['theoretical']}")
         print(f"\t{results[n]['noiseless']}")

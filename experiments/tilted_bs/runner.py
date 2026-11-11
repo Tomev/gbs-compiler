@@ -109,7 +109,9 @@ def create_bb_circuit(theta: float) -> str:
 
 def create_openqasm_circuit(bb_circuit: str, fock_cutoff: int = 4) -> str:
     compiler: CompilerGBS = CompilerGBS(fock_cutoff=fock_cutoff)
-    return compiler.compile_to_qasm(bb_circuit)
+    qasm: str = compiler.compile_to_qasm(bb_circuit)
+    # print(qasm)
+    return qasm
 
 
 def compute_theoretical_probs(theta: float) -> dict[str, float]:
@@ -159,6 +161,10 @@ def compute_noiseless_probs_from_shots(qasm: str, shots: int = 10_000) -> dict[s
 def compute_noisy_probs_from_shots(open_qasm: str, n_shots: int = 10_000) -> dict[str, float]:
     backend: IQMFakeBackend = create_noisy_vlq_sim()
     circuit: QuantumCircuit = transpile_to_IQM(QuantumCircuit.from_qasm_str(open_qasm), backend)
+
+    from qiskit import qasm2
+
+    print(qasm2.dumps(circuit))
 
     counts: dict[str, int] = backend.run(circuit, shots=n_shots).result().get_counts()
     total: int = sum(counts.values())
@@ -317,6 +323,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     print("Start")
-    # main()
-    run_layout_search()
+    main()
+    # run_layout_search()
     print("End")

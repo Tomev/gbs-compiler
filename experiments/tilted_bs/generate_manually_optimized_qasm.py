@@ -13,14 +13,17 @@ def generate_circuit(n: int) -> QuantumCircuit:
     """
     Returns the manually optimized tilted BS circuit with the index ``n``, including the measurements, with the same
     register layout as the original files (``qreg q[4]; creg c[4];``).
+
+    The ``_M`` blocks are composed (inlined) rather than appended as gates, so the scripts contain only the standard
+    gates and no custom ``gate`` definitions, which ``qml.from_qasm`` would load with the wrong qubit order.
     """
     theta: float = n * np.pi / 32
 
     tilted_bs_qc: QuantumCircuit = QuantumCircuit(4, 4)
     tilted_bs_qc = tilted_bs_qc & _state_preparation()
-    tilted_bs_qc.append(_M(), [2, 3])
+    tilted_bs_qc.compose(_M(), qubits=[2, 3], inplace=True)
     tilted_bs_qc = tilted_bs_qc & _V_even(theta)
-    tilted_bs_qc.append(_M().inverse(), [2, 3])
+    tilted_bs_qc.compose(_M().inverse(), qubits=[2, 3], inplace=True)
     tilted_bs_qc = tilted_bs_qc & _final_cxs()
     tilted_bs_qc.measure(range(4), range(4))
     return tilted_bs_qc

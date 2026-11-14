@@ -114,6 +114,25 @@ def create_openqasm_circuit(bb_circuit: str, fock_cutoff: int = 4) -> str:
     return qasm
 
 
+def save_openqasm_script(open_qasm: str, n: int) -> Path:
+    """Save the ``open_qasm`` script of the tilted beam-splitter circuit to a dedicated folder.
+
+    The script, compiled for ``theta = n * pi / 32``, goes to
+    ``openqasm_scripts/tilted_bs_n_<n>.qasm`` (next to this file), with ``n`` zero-padded to two
+    digits, and the path of the saved file is returned.
+
+    The folder is created if it doesn't exist and an already existing script for the same ``n``
+    gets overwritten.
+    """
+    output_dir = Path(__file__).with_name("openqasm_scripts")
+    output_dir.mkdir(exist_ok=True)
+
+    output = output_dir / f"tilted_bs_n_{n:02d}.qasm"
+    output.write_text(open_qasm)
+
+    return output
+
+
 def compute_theoretical_probs(theta: float) -> dict[str, float]:
     return filter_probs(
         {
@@ -284,6 +303,7 @@ def main() -> None:
 
         print(f"theta = {n} pi / 32")
         open_qasm_circuit: str = create_openqasm_circuit(create_bb_circuit(theta))
+        save_openqasm_script(open_qasm_circuit, n)
         results[n]["theoretical"] = compute_theoretical_probs(theta)
         results[n]["noiseless"] = compute_noiseless_probs(open_qasm_circuit)
         results[n][f"noiseless-{n_samples}-samples"] = compute_noiseless_probs_from_shots(open_qasm_circuit, n_samples)

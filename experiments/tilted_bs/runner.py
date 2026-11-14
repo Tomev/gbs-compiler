@@ -1,3 +1,4 @@
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -181,9 +182,8 @@ def compute_noisy_probs_from_shots(open_qasm: str, n_shots: int = 10_000) -> dic
     backend: IQMFakeBackend = create_noisy_vlq_sim()
     circuit: QuantumCircuit = transpile_to_IQM(QuantumCircuit.from_qasm_str(open_qasm), backend)
 
-    from qiskit import qasm2
-
-    print(qasm2.dumps(circuit))
+    # from qiskit import qasm2
+    # print(qasm2.dumps(circuit))
 
     counts: dict[str, int] = backend.run(circuit, shots=n_shots).result().get_counts()
     total: int = sum(counts.values())
@@ -288,47 +288,118 @@ def add_multinomial_stdevs(step_results: dict[str, dict[str, float]], n_samples:
             }
 
 
-def main() -> None:
+def load_optimized_openqasm_script(n: int) -> str | None:
+    """
+    Loads the manually optimized ``open_qasm`` script of the tilted beam-splitter circuit for ``theta = n * pi / 32``
+    from ``openqasm_scripts/optimized/manual/tilted_bs_n_<n>.qasm`` (next to this file), with ``n`` zero-padded to two
+    digits.
+
+    Prints a warning and returns ``None`` if the script doesn't exist. The scripts are only read, never generated.
+    """
+    script = Path(__file__).with_name("openqasm_scripts") / "optimized" / "manual" / f"tilted_bs_n_{n:02d}.qasm"
+
+    if not script.is_file():
+        print(f"\tWARNING: No manually optimized script for n = {n} ({script}); skipping the optimized entries.")
+        return None
+
+    return script.read_text()
+
+
+def compute_circuit_results(
+    open_qasm: str, theta: float, n_samples: int, prefix: str = ""
+) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """
+    Computes the probability series (with their ``-stdev`` companions) and the fidelities with the theory of the
+    circuit given as ``open_qasm``, for the tilted beam-splitter with parameter ``theta``.
+
+    Every key of the returned dicts starts with ``prefix``, so that the results of different versions of the circuit
+    can share a dict. The theoretical probabilities don't depend on the circuit, hence they are not included.
+    """
+    results: dict[str, dict[str, float]] = {}
+
+    results[f"{prefix}noiseless"] = compute_noiseless_probs(open_qasm)
+    results[f"{prefix}noiseless-{n_samples}-samples"] = compute_noiseless_probs_from_shots(open_qasm, n_samples)
+    results[f"{prefix}noisy-vlq-{n_samples}-samples"] = compute_noisy_probs_from_shots(open_qasm, n_samples)
+    results[f"{prefix}noise_mitigated_noisy_vql"] = apply_noise_mitigation(
+        results[f"{prefix}noisy-vlq-{n_samples}-samples"], n_samples
+    )
+    add_multinomial_stdevs(results, n_samples)
+
+    fidelity: dict[str, float] = {
+        f"{prefix}noiseless": compute_fidelity_with_theory(results[f"{prefix}noiseless-{n_samples}-samples"], theta),
+        f"{prefix}noisy": compute_fidelity_with_theory(results[f"{prefix}noisy-vlq-{n_samples}-samples"], theta),
+        f"{prefix}mitigated": compute_fidelity_with_theory(results[f"{prefix}noise_mitigated_noisy_vql"], theta),
+    }
+
+    for name in ("noiseless", "noisy", "mitigated"):
+        fidelity[f"{prefix}{name}-stderr"] = compute_fidelity_stderr(fidelity[f"{prefix}{name}"], n_samples)
+
+    return results, fidelity
+
+
+def parse_args() -> argparse.Namespace:
+    """Parses the command line. Without any flag the ``--compiled`` one is assumed."""
+    parser = argparse.ArgumentParser(description="Runs the tilted beam-splitter experiment.")
+    parser.add_argument(
+        "--compiled",
+        action="store_true",
+        help="Run the circuits compiled with CompilerGBS (the default if no flag is given).",
+    )
+    parser.add_argument(
+        "--optimized",
+        action="store_true",
+        help="Run the manually optimized circuits; their results are stored under keys prefixed with 'optimized-'.",
+    )
+    args = parser.parse_args()
+
+    if not (args.compiled or args.optimized):
+        args.compiled = True
+
+    return args
+
+
+def main(compiled: bool = True, optimized: bool = False) -> None:
     # print(create_bb_circuit(np.pi / 4))
     # print(create_openqasm_circuit(create_bb_circuit(np.pi / 4)))
     # print(theoretical_counts(np.pi / 4))
 
     results: dict[int, dict[str, dict[str, float]]] = {}
     fidelity: dict[int, dict[str, float]] = {}
-    n_samples: int = 10_000
+    n_samples: int = 3_000
 
     for n in range(17):
         results[n] = {}
+        fidelity[n] = {}
         theta = n * np.pi / 32
 
         print(f"theta = {n} pi / 32")
-        open_qasm_circuit: str = create_openqasm_circuit(create_bb_circuit(theta))
-        save_openqasm_script(open_qasm_circuit, n)
         results[n]["theoretical"] = compute_theoretical_probs(theta)
-        results[n]["noiseless"] = compute_noiseless_probs(open_qasm_circuit)
-        results[n][f"noiseless-{n_samples}-samples"] = compute_noiseless_probs_from_shots(open_qasm_circuit, n_samples)
-        results[n][f"noisy-vlq-{n_samples}-samples"] = compute_noisy_probs_from_shots(open_qasm_circuit, n_samples)
-        results[n]["noise_mitigated_noisy_vql"] = apply_noise_mitigation(
-            results[n][f"noisy-vlq-{n_samples}-samples"], n_samples
-        )
-        add_multinomial_stdevs(results[n], n_samples)
+        # print(f"\t{results[n]['theoretical']}")
 
-        fidelity[n] = {
-            "noiseless": compute_fidelity_with_theory(results[n][f"noiseless-{n_samples}-samples"], theta),
-            "noisy": compute_fidelity_with_theory(results[n][f"noisy-vlq-{n_samples}-samples"], theta),
-            "mitigated": compute_fidelity_with_theory(results[n]["noise_mitigated_noisy_vql"], theta),
-        }
+        circuits: list[tuple[str, str]] = []  # (key prefix, OpenQASM script) pairs
 
-        for name in ("noiseless", "noisy", "mitigated"):
-            fidelity[n][f"{name}-stderr"] = compute_fidelity_stderr(fidelity[n][name], n_samples)
+        if compiled:
+            open_qasm_circuit: str = create_openqasm_circuit(create_bb_circuit(theta))
+            save_openqasm_script(open_qasm_circuit, n)
+            circuits.append(("", open_qasm_circuit))
 
-        print(f"\t{results[n]['theoretical']}")
-        print(f"\t{results[n]['noiseless']}")
-        print(f"\t{results[n][f'noiseless-{n_samples}-samples']}")
-        print(f"\t{results[n][f'noisy-vlq-{n_samples}-samples']}")
-        print(f"\t{results[n]['noise_mitigated_noisy_vql']}")
+        if optimized:
+            optimized_qasm_circuit: str | None = load_optimized_openqasm_script(n)
 
-        print(f"\t{fidelity[n]}")
+            if optimized_qasm_circuit is not None:
+                circuits.append(("optimized-", optimized_qasm_circuit))
+
+        for prefix, open_qasm_circuit in circuits:
+            circuit_results, circuit_fidelity = compute_circuit_results(open_qasm_circuit, theta, n_samples, prefix)
+            results[n].update(circuit_results)
+            fidelity[n].update(circuit_fidelity)
+
+            # print(f"\t{prefix}" if prefix else "\t(compiled)")
+            # print(f"\t{results[n][f'{prefix}noiseless']}")
+            # print(f"\t{results[n][f'{prefix}noiseless-{n_samples}-samples']}")
+            # print(f"\t{results[n][f'{prefix}noisy-vlq-{n_samples}-samples']}")
+            # print(f"\t{results[n][f'{prefix}noise_mitigated_noisy_vql']}")
+            # print(f"\t{ {k: v for k, v in fidelity[n].items() if k.startswith(prefix)} }")
 
     output = Path(__file__).with_name("tilted_bs_results.json")
 
@@ -343,6 +414,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     print("Start")
-    main()
+    args = parse_args()
+    main(compiled=args.compiled, optimized=args.optimized)
     # run_layout_search()
     print("End")

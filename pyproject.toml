@@ -25,6 +25,7 @@ Issues = "https://github.com/Quantum-Cosmos-Lab/gbs-compiler/issues"
 [project.optional-dependencies]
 exp = [
     "iqm-research-award-2026 ; python_full_version >= '3.13'",
+    "kaleido>=1.5.0,!=1.5.1",
     "plotly>=7.1.0",
 ]
 

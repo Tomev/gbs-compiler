@@ -305,6 +305,19 @@ def load_optimized_openqasm_script(n: int) -> str | None:
     return script.read_text()
 
 
+def load_openqasm_script(n: int) -> str:
+    """
+    Loads the  ``open_qasm`` script of the tilted beam-splitter circuit for ``theta = n * pi / 32``
+    from ``openqasm_scripts/tilted_bs_n_<n>.qasm`` (next to this file), with ``n`` zero-padded to two
+    digits.
+
+    Prints a warning and returns ``None`` if the script doesn't exist. The scripts are only read, never generated.
+    """
+    script = Path(__file__).with_name("openqasm_scripts") / f"tilted_bs_n_{n:02d}.qasm"
+
+    return script.read_text()
+
+
 def compute_circuit_results(
     open_qasm: str, theta: float, n_samples: int, prefix: str = ""
 ) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
@@ -381,6 +394,8 @@ def main(compiled: bool = True, optimized: bool = False) -> None:
         if compiled:
             open_qasm_circuit: str = create_openqasm_circuit(create_bb_circuit(theta))
             save_openqasm_script(open_qasm_circuit, n)
+            open_qasm_circuit = load_openqasm_script(n)
+
             circuits.append(("", open_qasm_circuit))
 
         if optimized:

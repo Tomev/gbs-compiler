@@ -10,10 +10,16 @@ Results = dict[str, dict[str, dict[str, float]]]
 # An entry named "<series>-stdev" holds the errors of that series, and is not a series itself.
 STDEV_SUFFIX = "-stdev"
 
-# Each series takes the next style, in order of first appearance in the results.
+# Each series takes the next style, in order of first appearance in the results (an optimized series shares the style
+# of its compiled counterpart, see series_styles).
 COLORS = ["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948"]
 # Half-widths of the error bar caps, narrowing so that series lying on top of each other all stay visible.
 CAP_WIDTHS = [10, 8, 6, 5, 4, 4, 4, 4]
+
+# The runner stores the results of the manually optimized circuits under keys with this prefix.
+OPTIMIZED_PREFIX = "optimized-"
+# An optimized series gets the color of its compiled counterpart, scaled by this factor.
+OPTIMIZED_DARKENING = 0.6
 
 # Figure layout, in pixels.
 PANEL_HEIGHT = 182
@@ -30,12 +36,53 @@ def load_results(source: Path) -> Results:
 
 
 def find_series_names(data: Results, steps: list[str]) -> list[str]:
-    names = list(dict.fromkeys(name for step in steps for name in data[step] if not name.endswith(STDEV_SUFFIX)))
+    names = list(
+        dict.fromkeys(
+            name for step in steps for name in data[step] if not name.endswith(STDEV_SUFFIX)
+        )
+    )
 
-    if len(names) > len(COLORS):
-        raise ValueError(f"Found {len(names)} series, but only {len(COLORS)} styles are defined.")
+    n_bases = len(base_series_names(names))
+
+    if n_bases > len(COLORS):
+        raise ValueError(
+            f"Found {n_bases} distinct series, but only {len(COLORS)} styles are defined."
+        )
 
     return names
+
+
+def base_series_names(series_names: list[str]) -> list[str]:
+    """Returns the distinct series names with the ``optimized-`` prefix stripped, in order of first appearance."""
+    return list(dict.fromkeys(name.removeprefix(OPTIMIZED_PREFIX) for name in series_names))
+
+
+def darken(color: str, factor: float = OPTIMIZED_DARKENING) -> str:
+    """Returns the ``#rrggbb`` ``color`` with each channel scaled by ``factor``."""
+    channels = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+
+    return "#" + "".join(f"{int(channel * factor):02x}" for channel in channels)
+
+
+def series_styles(series_names: list[str]) -> list[tuple[str, int, str]]:
+    """
+    Returns the ``(color, cap width, legend symbol)`` of every series. An optimized series shares the hue and the cap
+    width index of its compiled counterpart, but is darker, narrower and has a different legend symbol.
+    """
+    bases = base_series_names(series_names)
+    styles: list[tuple[str, int, str]] = []
+
+    for name in series_names:
+        index = bases.index(name.removeprefix(OPTIMIZED_PREFIX))
+
+        if name.startswith(OPTIMIZED_PREFIX):
+            styles.append(
+                (darken(COLORS[index]), max(round(CAP_WIDTHS[index] * 0.6), 2), "line-ew")
+            )
+        else:
+            styles.append((COLORS[index], CAP_WIDTHS[index], "line-ns"))
+
+    return styles
 
 
 def series_label(name: str) -> str:
@@ -47,7 +94,9 @@ def series_stdevs(data: Results, steps: list[str], name: str, state: str) -> lis
     return [data[step].get(f"{name}{STDEV_SUFFIX}", {}).get(state, 0.0) for step in steps]
 
 
-def series_probabilities(data: Results, steps: list[str], name: str, state: str) -> list[float | None]:
+def series_probabilities(
+    data: Results, steps: list[str], name: str, state: str
+) -> list[float | None]:
     # A state absent from a series has probability 0; a series absent from a step has no data.
     return [data[step][name].get(state, 0.0) if name in data[step] else None for step in steps]
 
@@ -55,7 +104,7 @@ def series_probabilities(data: Results, steps: list[str], name: str, state: str)
 def add_state_panel(
     fig: go.Figure, data: Results, steps: list[str], series_names: list[str], state: str, row: int
 ) -> None:
-    for name, color, cap_width in zip(series_names, COLORS, CAP_WIDTHS):
+    for name, (color, cap_width, _) in zip(series_names, series_styles(series_names)):
         fig.add_trace(
             go.Scatter(
                 x=list(map(int, steps)),
@@ -81,7 +130,7 @@ def add_state_panel(
 
 def add_legend_entries(fig: go.Figure, series_names: list[str]) -> None:
     # Plotly draws no legend symbol for a trace that only has error bars, so these empty traces provide one.
-    for name, color in zip(series_names, COLORS):
+    for name, (color, _, symbol) in zip(series_names, series_styles(series_names)):
         fig.add_trace(
             go.Scatter(
                 x=[None],
@@ -89,7 +138,7 @@ def add_legend_entries(fig: go.Figure, series_names: list[str]) -> None:
                 name=series_label(name),
                 legendgroup=name,
                 mode="markers",
-                marker=dict(color=color, size=10, symbol="line-ns", line=dict(color=color, width=2)),
+                marker=dict(color=color, size=10, symbol=symbol, line=dict(color=color, width=2)),
             ),
             row=1,
             col=1,

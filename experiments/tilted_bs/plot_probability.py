@@ -36,18 +36,12 @@ def load_results(source: Path) -> Results:
 
 
 def find_series_names(data: Results, steps: list[str]) -> list[str]:
-    names = list(
-        dict.fromkeys(
-            name for step in steps for name in data[step] if not name.endswith(STDEV_SUFFIX)
-        )
-    )
+    names = list(dict.fromkeys(name for step in steps for name in data[step] if not name.endswith(STDEV_SUFFIX)))
 
     n_bases = len(base_series_names(names))
 
     if n_bases > len(COLORS):
-        raise ValueError(
-            f"Found {n_bases} distinct series, but only {len(COLORS)} styles are defined."
-        )
+        raise ValueError(f"Found {n_bases} distinct series, but only {len(COLORS)} styles are defined.")
 
     return names
 
@@ -76,9 +70,7 @@ def series_styles(series_names: list[str]) -> list[tuple[str, int, str]]:
         index = bases.index(name.removeprefix(OPTIMIZED_PREFIX))
 
         if name.startswith(OPTIMIZED_PREFIX):
-            styles.append(
-                (darken(COLORS[index]), max(round(CAP_WIDTHS[index] * 0.6), 2), "line-ew")
-            )
+            styles.append((darken(COLORS[index]), max(round(CAP_WIDTHS[index] * 0.6), 2), "line-ew"))
         else:
             styles.append((COLORS[index], CAP_WIDTHS[index], "line-ns"))
 
@@ -94,9 +86,7 @@ def series_stdevs(data: Results, steps: list[str], name: str, state: str) -> lis
     return [data[step].get(f"{name}{STDEV_SUFFIX}", {}).get(state, 0.0) for step in steps]
 
 
-def series_probabilities(
-    data: Results, steps: list[str], name: str, state: str
-) -> list[float | None]:
+def series_probabilities(data: Results, steps: list[str], name: str, state: str) -> list[float | None]:
     # A state absent from a series has probability 0; a series absent from a step has no data.
     return [data[step][name].get(state, 0.0) if name in data[step] else None for step in steps]
 
@@ -196,10 +186,10 @@ def build_figure(data: Results) -> go.Figure:
 
 
 def save_figure(fig: go.Figure, directory: Path) -> None:
-    fig.write_html(directory / "tilted_bs_plot.html", include_plotlyjs=True)
-    fig.write_image(directory / "tilted_bs_plot.pdf")
+    fig.write_html(directory / "tilted_bs_probability_plot.html", include_plotlyjs=True)
+    fig.write_image(directory / "tilted_bs_probability_plot.pdf")
     # The bars are only about a pixel tall at 10k shots, so the raster needs extra resolution.
-    fig.write_image(directory / "tilted_bs_plot.png", scale=3)
+    fig.write_image(directory / "tilted_bs_probability_plot.png", scale=3)
 
 
 def main() -> None:
